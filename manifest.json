@@ -6,7 +6,7 @@
   "permissions": [],
   "main": "code.js",
   "menu": [
-    { "command": "export", "name": "Export Variables" }
+    { "command": "export", "name": "variables export" }
   ],
   "ui": {"export": "export.html" },
   "documentAccess": "dynamic-page"
