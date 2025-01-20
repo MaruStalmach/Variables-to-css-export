@@ -57,7 +57,7 @@ function importJSONFile({ fileName, body }) {
  * 
  */
 function processAliases({ collection, modeId, aliases, tokens }) {
-    aliases = Object.values(aliases); //into array
+    aliases = Object.values(aliases); //cast onto array
     let generations = aliases.length;
     while (aliases.length && generations > 0) {
         for (let i = 0; i < aliases.length; i++) {
@@ -145,6 +145,9 @@ function traverseToken({
     }
 }
 
+/**
+ * Fetches available skins collections and passes it into the UI
+ */
 async function initializeExportUI() {
     try {
         const collections = await figma.variables.getLocalVariableCollectionsAsync();
@@ -171,11 +174,19 @@ async function initializeExportUI() {
     }
 }
 
+/**
+ * Creates a CSS file to download with the variables from the selected skins.
+ * Applies the following changes:
+ * 1. strips px suffix from variables containing "visibility", "bold", "regular" or "weight" in the name
+ * 2. skips variables containing "ux" in the name
+ * 3.
+ * 
+ * @param selectedSkins selected checkboxes 
+ * @returns donloadable CSS file with the variables from the selected skins
+ */
 async function exportToCSS(selectedSkins = []) {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     let modeExports = {};
-    
-    console.log("Collections fetched: ", collections);
 
     if (!collections || collections.length === 0) {
         console.error("No collections found");
@@ -191,19 +202,20 @@ async function exportToCSS(selectedSkins = []) {
         }
 
         for (const mode of modes) {
-            // Skip if this mode/skin wasn't selected
+            //if the skin is not selected
             if (selectedSkins.length > 0 && !selectedSkins.includes(mode.name)) {
                 continue;
             }
 
             let cssVariables = '';
             
+            //for each variable in the collection
             for (const variableId of variableIds) {
                 try {
                     const variable = await figma.variables.getVariableByIdAsync(variableId);
                     const { name, resolvedType, valuesByMode } = variable;
                     
-                    // Skip variables containing "ux" in their names
+                    //skip if the variable contains "ux"
                     if (name.toLowerCase().includes('ux')) {
                         continue;
                     }
@@ -216,7 +228,8 @@ async function exportToCSS(selectedSkins = []) {
                         let cssValue;
                         if (value.type === "VARIABLE_ALIAS") {
                             const currentVar = await figma.variables.getVariableByIdAsync(value.id);
-                            // Skip if the referenced variable contains "ux"
+                            
+                            //skip if reference contains "ux"
                             if (currentVar.name.toLowerCase().includes('ux')) {
                                 continue;
                             }
@@ -224,6 +237,7 @@ async function exportToCSS(selectedSkins = []) {
                         } else {
                             cssValue = resolvedType === "COLOR" ? rgbToHex(value) : value;
 
+                            //strip px suffix from variables containing "visibility", "bold", "regular" or "weight" in the name
                             const excludePxSuffix = /weight|bold|regular|visibility/i.test(name);
                             if (typeof cssValue === 'number' && !excludePxSuffix) {
                                 cssValue = `${cssValue}px`;
@@ -255,6 +269,9 @@ async function exportToCSS(selectedSkins = []) {
     figma.ui.postMessage({ type: "EXPORT_RESULT", files });
 }
 
+/**
+ * Converts an RGB to HEX 
+ */
 function rgbToHex({ r, g, b, a }) {
     if (a !== 1) {
         return `rgba(${[r, g, b]
@@ -323,6 +340,9 @@ function parseColor(color) {
     }
 }
 
+/**
+ * Converts HSL to RGB
+ */
 function hslToRgbFloat(h, s, l) {
     const hue2rgb = (p, q, t) => {
         if (t < 0) t += 1;
@@ -346,8 +366,10 @@ function hslToRgbFloat(h, s, l) {
     return { r, g, b };
 }
 
+/**
+ * If 
+ */
 figma.ui.onmessage = async (e) => {
-    console.log("code received message", e);
     if (e.type === "EXPORT") {
         await exportToCSS(e.skins);
     } else if (e.type === "GET_SKINS") {
