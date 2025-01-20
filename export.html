@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Variables</title>
+    <style>
+        :root {
+            --spacing: 0.8rem;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--figma-color-bg);
+            color: var(--figma-color-text);
+            margin: 0;
+            padding: var(--spacing);
+        }
+
+        html, body, main {
+            height: 100%;
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+        }
+
+        .skin-selector {
+            background-color: var(--figma-color-bg-secondary);
+            border: 2px solid var(--figma-color-border);
+            border-radius: 4px;
+            padding: var(--spacing);
+            margin-bottom: var(--spacing);
+        }
+
+        .skin-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .skin-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .skin-option label {
+            font-size: 14px;
+            user-select: none;
+        }
+
+        button {
+            appearance: none;
+            border-radius: 4px;
+            padding: var(--spacing);
+            background-color: var(--figma-color-bg-brand);
+            border: none;
+            color: var(--figma-color-text-onbrand);
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        textarea {
+            background-color: var(--figma-color-bg-secondary);
+            border: 2px solid var(--figma-color-border);
+            color: var(--figma-color-text);
+            flex: 1;
+            font-family: monospace;
+            padding: var(--spacing);
+            width: 100%;
+        }
+
+        .actions {
+            display: flex;
+            gap: var(--spacing);
+        }
+
+        #select-all {
+            background-color: var(--figma-color-bg-secondary);
+            border: 1px solid var(--figma-color-border);
+            color: var(--figma-color-text);
+        }
+
+        .loading {
+            text-align: center;
+            padding: var(--spacing);
+            color: var(--figma-color-text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="skin-selector">
+            <h3>Select skins to export:</h3>
+            <div id="skin-options" class="skin-options">
+                <div class="loading">Loading available skins...</div>
+            </div>
+        </div>
+        <div class="actions">
+            <button id="select-all" type="button" disabled>Select All</button>
+            <button id="export" type="button" disabled>Export Selected</button>
+        </div>
+        <textarea placeholder="Exported variables will render here..." readonly></textarea>
+    </main>
+
+    <script>
+        let availableSkins = [];
+        const skinOptionsContainer = document.getElementById("skin-options");
+        const exportButton = document.getElementById("export");
+        const selectAllButton = document.getElementById("select-all");
+        const textarea = document.querySelector("textarea");
+
+        window.onmessage = async ({ data: { pluginMessage } }) => {
+            console.log("Received message:", pluginMessage);
+            
+            if (pluginMessage.type === "AVAILABLE_SKINS") {
+                availableSkins = pluginMessage.skins;
+                console.log("Received skins:", availableSkins);
+                
+                if (availableSkins.length === 0) {
+                    skinOptionsContainer.innerHTML = '<div class="loading">No skins found</div>';
+                    return;
+                }
+
+            
+                skinOptionsContainer.innerHTML = availableSkins.map(skin => `
+                    <div class="skin-option">
+                        <input type="checkbox" id="${skin}" name="skins" value="${skin}">
+                        <label for="${skin}">${skin}</label>
+                    </div>
+                `).join("");
+
+                selectAllButton.disabled = false;
+                updateExportButtonState();
+
+          
+                document.querySelectorAll('input[name="skins"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', updateExportButtonState);
+                });
+            }
+            else if (pluginMessage.type === "EXPORT_RESULT") {
+                if (Array.isArray(pluginMessage.files)) {
+                    textarea.value = pluginMessage.files
+                        .map(({ fileName, body }) => `/* ${fileName} */\n\n${body}`)
+                        .join("\n\n\n");
+
+                    pluginMessage.files.forEach(({ fileName, body }) => {
+                        const blob = new Blob([body], { type: 'text/css' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    });
+                }
+            }
+            else if (pluginMessage.type === "ERROR") {
+                skinOptionsContainer.innerHTML = `<div class="loading">Error: ${pluginMessage.message}</div>`;
+            }
+        };
+
+        function updateExportButtonState() {
+            const selectedCount = document.querySelectorAll('input[name="skins"]:checked').length;
+            exportButton.disabled = selectedCount === 0;
+        }
+
+        selectAllButton.addEventListener("click", () => {
+            const checkboxes = document.querySelectorAll('input[name="skins"]');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(checkbox => checkbox.checked = !allChecked);
+            updateExportButtonState();
+        });
+
+        exportButton.addEventListener("click", () => {
+            const selectedSkins = Array.from(document.querySelectorAll('input[name="skins"]:checked'))
+                .map(checkbox => checkbox.value);
+
+            parent.postMessage({
+                pluginMessage: {
+                    type: "EXPORT",
+                    skins: selectedSkins
+                }
+            }, "*");
+        });
+
+        console.log("Requesting skins...");
+        parent.postMessage({ pluginMessage: { type: "GET_SKINS" } }, "*");
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "varables-to-css-export",
+  "id": "1225498390710809905",
+  "api": "1.0.0",
+  "editorType": ["figma"],
+  "permissions": [],
+  "main": "code.js",
+  "menu": [
+    { "command": "export", "name": "Export Variables" }
+  ],
+  "ui": {"export": "export.html" },
+  "documentAccess": "dynamic-page"
+}
