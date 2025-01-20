@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+jspm_packages/
+
+# Figma plugin build files
+dist/
+build/
+
+# Figma plugin UI files
+*.html
+
+# Environment variables
+.env
+
+# Mac system files
+.DS_Store
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Ignore the main code file
+code.js
