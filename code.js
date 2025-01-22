@@ -185,27 +185,26 @@ async function initializeExportUI() {
  * @returns donloadable CSS file with the variables from the selected skins
  */
 async function exportToCSS(selectedSkins = []) {
+    //fetch all collections
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    let modeExports = {};
+    let forExport = {};
 
-    // Helper function to get the final value, handling both direct values and objects
+    //helper function to get the final value, handling both direct values and objects
     function getProcessedValue(value, name, resolvedType) {
-        // If it's not an object or null, return as is
+        //if not Object or null
         if (!value || typeof value !== 'object') {
             return value;
         }
-
-        // Handle variable aliases
+       
         if (value.type === "VARIABLE_ALIAS") {
-            return value; // This will be handled in the main processing loop
+            return value; //return alias
         }
-
-        // Handle color objects
+    
         if ('r' in value && 'g' in value && 'b' in value) {
             return rgbToHex(value);
         }
 
-        // Handle font objects
+        //handle font objects for sub-properties 
         if (value.family || value.fontFamily || value.style) {
             let fontProps = [];
             if (value.family) fontProps.push(`"${value.family}"`);
@@ -214,18 +213,15 @@ async function exportToCSS(selectedSkins = []) {
             if (value.fontSize) fontProps.push(`${value.fontSize}px`);
             return fontProps.join(' ');
         }
-
-        // If it's a single value object (like space or padding)
         if (Object.keys(value).length === 1) {
             const singleValue = Object.values(value)[0];
             return typeof singleValue === 'number' ? `${singleValue}px` : singleValue;
         }
 
-        // For other objects, try to get the most relevant value
         if (value.value !== undefined) return value.value;
         if (value.default !== undefined) return value.default;
 
-        // If we can't determine the proper value, stringify the object for debugging
+        //stringify for unhandled objects
         console.warn('Unhandled object value for:', name, value);
         return JSON.stringify(value);
     }
@@ -282,8 +278,6 @@ async function exportToCSS(selectedSkins = []) {
                             cssValue = `var(--${currentVar.name.replace(/\//g, '-').replace(/\s+/g, '-')})`;
                         } else {
                             cssValue = getProcessedValue(value, name, resolvedType);
-                            
-                            // Handle numeric values with px
                             if (typeof cssValue === 'number' && !name.toLowerCase().match(/weight|bold|regular|visibility/i)) {
                                 cssValue = `${cssValue}px`;
                             }
@@ -292,7 +286,7 @@ async function exportToCSS(selectedSkins = []) {
                         cssVariables += `    ${varName}: ${cssValue};\n`;
                     }
 
-                    // Process parent variables
+                    //process parent variable
                     const pathParts = name.split('/');
                     if (pathParts.length > 1) {
                         const parentPath = pathParts.slice(0, -1).join('/');
@@ -321,12 +315,12 @@ async function exportToCSS(selectedSkins = []) {
 
             if (cssVariables) {
                 const modeName = mode.name.toLowerCase().replace(/\s+/g, '-');
-                modeExports[modeName] = `:root {\n${cssVariables}}\n`;
+                forExport[modeName] = `:root {\n${cssVariables}}\n`;
             }
         }
     }
 
-    const files = Object.entries(modeExports).map(([modeName, cssContent]) => ({
+    const files = Object.entries(forExport).map(([modeName, cssContent]) => ({
         fileName: `variables-${modeName}.css`,
         body: cssContent
     }));
