@@ -4,10 +4,10 @@
   "api": "1.0.0",
   "editorType": ["figma"],
   "permissions": [],
-  "main": "code.js",
+  "main": "codev3.js",
   "menu": [
     { "command": "export", "name": "variables export" }
   ],
-  "ui": {"export": "export.html" },
+  "ui": {"export": "exportv2.html" },
   "documentAccess": "dynamic-page"
 }
