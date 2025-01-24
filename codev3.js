@@ -108,9 +108,10 @@ function traverseToken({
 
 async function exportToJSON() {
     try {
-      console.log("Fetching variable collections...");
+      console.log("Fetching variable collections... in exportJSON");
       const collections = await figma.variables.getLocalVariableCollectionsAsync();
       console.log("Fetched collections:", collections);
+      console.log("Fetched:", figma.variables[collections])
   
       const variables = [];
   
@@ -184,19 +185,117 @@ async function exportToJSON() {
 //   }
   
 
-figma.ui.onmessage = async (e) => {
-  console.log("code received message", e);
-  if (e.type === "EXPORT") {
-    await exportToJSON();
+figma.ui.onmessage = async (message) => {
+    console.log("Received message:", message);
+  
+    if (message.type === "EXPORT") {
+      try {
+
+        //gets the collection
+        const collections = await figma.variables.getLocalVariableCollectionsAsync();
+
+        const result = [];
+  
+        for (const collection of collections) {
+          const { name, modes, variableIds } = collection;
+          const modeDetails = modes.map((mode) => ({
+            name: mode.name,
+            id: mode.modeId
+          }));
+  
+          const variableDetails = await Promise.all(
+            variableIds.map(async (variableId) => {
+              try {
+                const variable = await figma.variables.getVariableByIdAsync(variableId);
+                return {
+                  name: variable.name,
+                  type: variable.resolvedType,
+                  valuesByMode: variable.valuesByMode || {},
+                };
+              } catch (err) {
+                console.error(`Failed to fetch variable: ${variableId}`, err);
+                return null;
+              }
+            })
+          );
+  
+          result.push({
+            collectionName: name,
+            modes: modeDetails,
+            variables: variableDetails
+          });
+        }
+        
+        const fileStructure = {};
+
+        result.forEach(collection => {
+        collection.modes.forEach(mode => {
+            const modeDict = {};
+            
+            collection.variables.forEach(variable => {
+            const modeValue = variable.valuesByMode[mode.id];
+            // console.log("value: ", variable)
+            variable = parseVariable(variable, modeValue)
+            // console.log("HERE",variable)
+            // {name: 'font/paragraph/text5mobile/size', type: 'FLOAT', valuesByMode: {…}}
+            modeDict[variable.name] = {
+                type: variable.type,
+                value: modeValue
+            };
+            });
+
+            // Use collection name and mode name as nested keys
+            if (!fileStructure[collection.collectionName]) {
+            fileStructure[collection.collectionName] = {};
+            }
+            fileStructure[collection.collectionName][mode.name] = modeDict;
+        });
+        });
+
+        console.log(fileStructure)
+  
+        figma.ui.postMessage({ type: "EXPORT_RESULT", data: result });
+      } catch (err) {
+        console.error("Export error:", err);
+        figma.ui.postMessage({ type: "EXPORT_ERROR", error: err.message });
+      }
+    }
+  };
+  
+  if (figma.command === "export") {
+    figma.showUI(__uiFiles__["export"], {
+      width: 500,
+      height: 500,
+      themeColors: true,
+    });
   }
-};
-if (figma.command === "export") {
-  figma.showUI(__uiFiles__["export"], {
-    width: 500,
-    height: 500,
-    themeColors: true,
-  });
-}
+  
+  function parseVariable(variable, modeValue) {
+    // Replace "/" with "-" in variable name
+    variable.name = variable.name.replaceAll("/", "-");
+  
+    // Check for specific conditions to add 'px'
+    const shouldAddPx = /size|width|height|padding|margin|gap/i.test(variable.name);
+    
+    // Modify valuesByMode for numeric types
+    if (shouldAddPx && variable.type === 'FLOAT' && modeValue !== undefined) {
+      const numericValue = parseFloat(modeValue);
+      if (!isNaN(numericValue)) {
+        variable.valuesByMode[Object.keys(variable.valuesByMode)[0]] = `${numericValue}px`;
+        console.log('--'+variable.name+': '+variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]+';')
+      }
+    } else if (variable.type == 'COLOR' && modeValue !== undefined) {
+        console.log("KOLOR")
+    }
+    
+    else {
+        console.log('--'+variable.name+': '+variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]+';')
+    }
+  
+    return variable;
+  }
+
+
 
 function rgbToHex({ r, g, b, a }) {
   if (a !== 1) {
