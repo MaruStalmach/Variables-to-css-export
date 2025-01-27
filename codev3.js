@@ -270,30 +270,44 @@ figma.ui.onmessage = async (message) => {
     });
   }
   
-  function parseVariable(variable, modeValue) {
-    // Replace "/" with "-" in variable name
+  async function parseVariable(variable, modeValue) {
     variable.name = variable.name.replaceAll("/", "-");
-  
+
+
     // Check for specific conditions to add 'px'
-    const shouldAddPx = /size|width|height|padding|margin|gap/i.test(variable.name);
-    
-    // Modify valuesByMode for numeric types
-    if (shouldAddPx && variable.type === 'FLOAT' && modeValue !== undefined) {
-      const numericValue = parseFloat(modeValue);
-      if (!isNaN(numericValue)) {
-        variable.valuesByMode[Object.keys(variable.valuesByMode)[0]] = `${numericValue}px`;
-        console.log('--'+variable.name+': '+variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]+';')
+    const shouldAddPx = /bold|weight|regular|visibility|/i.test(variable.name);
+
+    if (shouldAddPx && variable.type === "FLOAT" && modeValue !== undefined) {
+        const numericValue = parseFloat(modeValue);
+        if (!isNaN(numericValue)) {
+          const processedValue = `${numericValue}px`;
+          console.log(`--${variable.name}: ${processedValue};`);
+          return processedValue;
+        } else {
+          const parsedAlias = variable.value
+          console.log(parsedAlias)
+        }
+      
+    } else if (variable.type === "COLOR" && modeValue !== undefined) {
+        const colorValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+        if (colorValue && typeof colorValue === "object" && "r" in colorValue && "g" in colorValue && "b" in colorValue) {
+            // Convert the color object to HEX
+            const colorHex = rgbToHex(colorValue);
+            console.log(`--${variable.name}: ${colorHex};`);
+            return colorHex;
+        } else {
+          const variableType = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]
+          const aliasID = variableType.id;
+          variable.value = processAliases()
+        }
+      } else if (variable.type === "COLOR" && modeValue !== undefined){
+        const defaultValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+        console.log(`--${variable.name}: ${defaultValue};`);
+      } else {
+        const parsedAlias = variable
+        console.log(parsedAlias)
       }
-    } else if (variable.type == 'COLOR' && modeValue !== undefined) {
-        console.log("KOLOR")
     }
-    
-    else {
-        console.log('--'+variable.name+': '+variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]+';')
-    }
-  
-    return variable;
-  }
 
 
 
@@ -362,26 +376,4 @@ function parseColor(color) {
   } else {
     throw new Error("Invalid color format");
   }
-}
-function hslToRgbFloat(h, s, l) {
-  const hue2rgb = (p, q, t) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-
-  if (s === 0) {
-    return { r: l, g: l, b: l };
-  }
-
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const r = hue2rgb(p, q, (h + 1 / 3) % 1);
-  const g = hue2rgb(p, q, h % 1);
-  const b = hue2rgb(p, q, (h - 1 / 3) % 1);
-
-  return { r, g, b };
 }
