@@ -41,6 +41,25 @@ function isAlias(value) {
   return value.toString().trim().charAt(0) === "{";
 }
 
+
+async function aliasProcessing(collection, modeValue, variable) {
+  const parsedVariable = variable
+  const aliasID = parsedVariable.id;
+
+  const variableByAlias = await figma.variables.getVariableByIdAsync(aliasID)
+  const result = await parseVariable(collection, modeValue, variable)
+  console.log("PROCESSED")
+  console.log(result)
+
+}
+
+
+
+
+
+
+
+
 function traverseToken({
   collection,
   modeId,
@@ -235,7 +254,7 @@ figma.ui.onmessage = async (message) => {
             collection.variables.forEach(variable => {
             const modeValue = variable.valuesByMode[mode.id];
             // console.log("value: ", variable)
-            variable = parseVariable(variable, modeValue)
+            variable = parseVariable(collection, modeValue, variable)
             // console.log("HERE",variable)
             // {name: 'font/paragraph/text5mobile/size', type: 'FLOAT', valuesByMode: {…}}
             modeDict[variable.name] = {
@@ -269,48 +288,88 @@ figma.ui.onmessage = async (message) => {
       themeColors: true,
     });
   }
+  async function parseVariable(collection, modeValue, variable) {
+    // Normalize the variable name by replacing '/' with '-'
+    variable.name = normalizeVariableName(variable.name);
   
-  async function parseVariable(variable, modeValue) {
-    variable.name = variable.name.replaceAll("/", "-");
-
-
-    // Check for specific conditions to add 'px'
-    const shouldAddPx = /bold|weight|regular|visibility|/i.test(variable.name);
-
-    if (shouldAddPx && variable.type === "FLOAT" && modeValue !== undefined) {
-        const numericValue = parseFloat(modeValue);
-        if (!isNaN(numericValue)) {
-          const processedValue = `${numericValue}px`;
-          console.log(`--${variable.name}: ${processedValue};`);
-          return processedValue;
-        } else {
-          const parsedAlias = variable.value
-          console.log(parsedAlias)
-        }
-      
-    } else if (variable.type === "COLOR" && modeValue !== undefined) {
-        const colorValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
-        if (colorValue && typeof colorValue === "object" && "r" in colorValue && "g" in colorValue && "b" in colorValue) {
-            // Convert the color object to HEX
-            const colorHex = rgbToHex(colorValue);
-            console.log(`--${variable.name}: ${colorHex};`);
-            return colorHex;
-        } else {
-          const variableType = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]
-          const aliasID = variableType.id;
-          variable.value = processAliases()
-        }
-      } else if (variable.type === "COLOR" && modeValue !== undefined){
-        const defaultValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
-        console.log(`--${variable.name}: ${defaultValue};`);
-      } else {
-        const parsedAlias = variable
-        console.log(parsedAlias)
-      }
+    // Process based on variable type and conditions
+    if (isFloatWithPxCondition(variable, modeValue)) {
+      return handleFloatWithPx(variable, modeValue);
+    } else if (isColorWithDefinedModeValue(variable, modeValue)) {
+      return handleColorVariable(variable);
+    } else if (isDefaultColor(variable, modeValue)) {
+      return handleDefaultColor(variable);
+    } else {
+      return handleAlias(variable);
     }
-
-
-
+  }
+  
+  // Helper Functions
+  function normalizeVariableName(name) {
+    return name.replaceAll("/", "-");
+  }
+  
+  function isFloatWithPxCondition(variable, modeValue) {
+    const shouldAddPx = /bold|weight|regular|visibility|/i.test(variable.name);
+    return shouldAddPx && variable.type === "FLOAT" && modeValue !== undefined;
+  }
+  
+  function handleFloatWithPx(variable, modeValue) {
+    const numericValue = parseFloat(modeValue);
+    if (!isNaN(numericValue)) {
+      const processedValue = `${numericValue}px`;
+      console.log(`--${variable.name}: ${processedValue};`);
+      return processedValue;
+    }
+    // Handle invalid numeric value (optional behavior)
+    console.log(`Invalid numeric value for ${variable.name}`);
+  }
+  
+  function isColorWithDefinedModeValue(variable, modeValue) {
+    return variable.type === "COLOR" && modeValue !== undefined;
+  }
+  
+  async function handleColorVariable(variable) {
+    const colorValue = getColorValue(variable);
+    if (isValidColorObject(colorValue)) {
+      const colorHex = rgbToHex(colorValue);
+      console.log(`--${variable.name}: ${colorHex};`);
+      return colorHex;
+    } else {
+      return await resolveColorAlias(variable);
+    }
+  }
+  
+  function getColorValue(variable) {
+    return variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+  }
+  
+  function isValidColorObject(colorValue) {
+    return colorValue && typeof colorValue === "object" && "r" in colorValue && "g" in colorValue && "b" in colorValue;
+  }
+  
+  async function resolveColorAlias(variable) {
+    const aliasVariable = await figma.variables.getVariableByIdAsync(variable.valuesByMode[Object.keys(variable.valuesByMode)[0]].id);
+    const resolvedAlias = normalizeVariableName(aliasVariable.name);
+    console.log(`--${variable.name}: (--var-${resolvedAlias});`);
+    return `--var-${resolvedAlias}`;
+  }
+  
+  function isDefaultColor(variable, modeValue) {
+    return variable.type === "COLOR" && modeValue !== undefined;
+  }
+  
+  function handleDefaultColor(variable) {
+    const defaultValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+    console.log(`--${variable.name}: ${defaultValue};`);
+    return defaultValue;
+  }
+  
+  function handleAlias(variable) {
+    console.log(variable);
+    return variable;
+  }
+  
 function rgbToHex({ r, g, b, a }) {
   if (a !== 1) {
     return `rgba(${[r, g, b]
