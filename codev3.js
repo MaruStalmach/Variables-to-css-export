@@ -1,63 +1,23 @@
 console.clear();
 
-function createToken(collection, modeId, type, name, value) {
-  const token = figma.variables.createVariable(name, collection, type);
-  token.setValueForMode(modeId, value);
-  return token;
-}
-
-/**
- * For the purpose of resolving an alias a token is created
- */
-function createVariable(collection, modeId, key, valueKey, tokens) {
-  const token = tokens[valueKey];
-  return createToken(collection, modeId, token.resolvedType, key, {
-    type: "VARIABLE_ALIAS",
-    id: `${token.id}`,
-  });
-}
-
-function processAliases({ collection, modeId, aliases, tokens }) {
-  aliases = Object.values(aliases);
-  let depth = aliases.length;
-
-  //loop for nested aliases
-  while (aliases.length && depth > 0) {
-    for (let i = 0; i < aliases.length; i++) {
-    
-      const { key, type, valueKey } = aliases[i];
-
-      const token = tokens[valueKey];
-      if (token) {
-        aliases.splice(i, 1); 
-        tokens[key] = createVariable(collection, modeId, key, valueKey, tokens);
-      }
-    }
-    depth--;
-  }
-}
-
-function isAlias(value) {
-  return value.toString().trim().charAt(0) === "{";
-}
-
-async function parseVariable(collection, modeValue, variable) {
+async function parseVariable(modeValue, variable) {
   variable.name = variableNameToCSS(variable.name);
 
-  if (isNumeric(variable, modeValue)) { //for float values+ px handling
-    return handleNumeric
-
-  } else if (isDefinedColour(variable, modeValue)) { //for colours
-    return handleColour(variable);
-
-  } else if (isString(variable, modeValue)) { //for strings
-    return handleString(variable)
-
-  } else if (isBoolean(variable, modeValue)) { //for booleans, same as for string
-    return handleBoolean(variable)
-
+  if (isNumeric(variable, modeValue)) {
+    variable = handleNumeric(variable, modeValue);
+    return variable;
+  } else if (isDefinedColour(variable, modeValue)) {
+    variable = await handleColour(variable);
+    return variable;
+  } else if (isString(variable, modeValue)) {
+    variable = handleString(variable);
+    return variable;
+  } else if (isBoolean(variable, modeValue)) {
+    variable = handleBoolean(variable);
+    return variable;
   } else {
-    return handleAlias(variable); //else if it's an alias
+    variable = await resolveAlias(variable);  // Resolve alias if it's an alias
+    return variable;
   }
 }
 
@@ -72,53 +32,34 @@ function isNumeric(variable, modeValue) {
 function handleNumeric(variable, modeValue) {
   const shouldAddPx = /bold|weight|regular/i.test(variable.name);
   const numericValue = parseFloat(modeValue);
-
   if (shouldAddPx && !isNaN(numericValue)) {
     const processedValue = `${numericValue}px`;
-    console.log(`--${variable.name}: ${processedValue};`);
-    return processedValue;
+    return `--${variable.name}: ${processedValue};`;
+  } else {
+    return `--${variable.name}: ${numericValue};`;
   }
-  console.log(`Invalid value: ${variable.name}`)
-  
 }
 
-/**
- * For not aliased colours 
- */
 function isDefinedColour(variable, modeValue) {
   return variable.type === "COLOR" && modeValue !== undefined;
 }
 
-/**
- * For colour variable handling -> converts to hex and resolves aliases
- */
 async function handleColour(variable) {
   const colorValue = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
 
-  if (colorValue && typeof colorValue === "object" && "r" in colorValue && "g" in colorValue && "b" in colorValue) { //in rgb format in json
+  if (colorValue && typeof colorValue === "object" && "r" in colorValue && "g" in colorValue && "b" in colorValue) {
     const colorHex = rgbToHex(colorValue);
-    console.log(`--${variable.name}: ${colorHex};`);
-    return colorHex;
-
+    return `--${variable.name}: ${colorHex};`;
   } else {
-    return await resolveAlias(variable); //if an alias resolve and return
+    const resolved = await resolveAlias(variable);
+    return `--${variable.name}: ${resolved};`;
   }
 }
 
 async function resolveAlias(variable) {
   const aliasVariable = await figma.variables.getVariableByIdAsync(variable.valuesByMode[Object.keys(variable.valuesByMode)[0]].id);
   const resolvedAlias = variableNameToCSS(aliasVariable.name);
-  console.log(`--${variable.name}: (--var-${resolvedAlias});`);
-  return `--var-${resolvedAlias}`;
-}
-
-function isDefaultColor(variable, modeValue) {
-  return variable.type === "COLOR" && modeValue !== undefined;
-}
-
-function handleAlias(variable) {
-  console.log(variable);
-  return variable;
+  return `(--var-${resolvedAlias})`;
 }
 
 function isString(variable, modeValue) {
@@ -126,10 +67,10 @@ function isString(variable, modeValue) {
 }
 
 function handleString(variable) {
-  const value = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]]
-  console.log(`--${variable.name}: ${value};`);
-  return variable
+  const value = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
+  return `--${variable.name}: ${value};`;
 }
+
 function isBoolean(variable, modeValue) {
   return variable.type === "BOOLEAN" && modeValue !== undefined;
 }
@@ -137,22 +78,16 @@ function isBoolean(variable, modeValue) {
 function handleBoolean(variable) {
   const value = variable.valuesByMode[Object.keys(variable.valuesByMode)[0]];
   const boolString = value === true ? 'true' : 'false';
-  console.log(`--${variable.name}: ${boolString};`);
-  return variable;
+  return `--${variable.name}: ${boolString};`;
 }
 
-/**
- * Resolves a given rgb value returning hex
- */
 function rgbToHex({ r, g, b, a }) {
   const toHex = (value) => {
     const hex = Math.round(value * 255).toString(16);
     return hex.length === 1 ? "0" + hex : hex;
   };
 
-  // Convert alpha to hex as well
   const alphaHex = a !== 1 ? toHex(a) : "";
-  
   const hex = [toHex(r), toHex(g), toHex(b)].join("");
   return `#${hex}${alphaHex}`;
 }
@@ -162,62 +97,40 @@ figma.ui.onmessage = async (message) => {
   if (message.type === "EXPORT") {
     try {
       const collections = await figma.variables.getLocalVariableCollectionsAsync();
-
-      const result = [];
+      const result = {};
 
       for (const collection of collections) {
         const { name, modes, variableIds } = collection;
-        const modeDetails = modes.map((mode) => ({
-          name: mode.name,
-          id: mode.modeId
-        }));
+        
+        // Initialize the collection entry in the result
+        result[name] = {};
 
-        const variableDetails = await Promise.all(
-          variableIds.map(async (variableId) => {
+        // Loop over modes for this collection
+        for (const mode of modes) {
+          const modeVariable = [];
+
+          // Fetch variables for each mode
+          for (const variableId of variableIds) {
             try {
               const variable = await figma.variables.getVariableByIdAsync(variableId);
-              return {
-                name: variable.name,
-                type: variable.resolvedType,
-                valuesByMode: variable.valuesByMode || {},
-              };
+              const modeValue = variable.valuesByMode[mode.modeId];
+              
+              // Process the variable based on its type
+              const parsedVariable = await parseVariable(modeValue, variable);
+
+              // Store the result in the modeVariable array
+              modeVariable.push(parsedVariable);
             } catch (err) {
               console.error(`Failed to fetch: ${variableId}`, err);
-              return null;
             }
-          })
-        );
+          }
 
-        result.push({
-          collectionName: name,
-          modes: modeDetails,
-          variables: variableDetails
-        });
+          // Add the array of parsed variables for the current mode
+          result[name][mode.name] = modeVariable;
+        }
       }
 
-      const fileStructure = {};
-
-      result.forEach(collection => {
-        collection.modes.forEach(mode => {
-            const modeDict = {};
-            collection.variables.forEach(variable => {
-              const modeValue = variable.valuesByMode[mode.id];
-              variable = parseVariable(collection, modeValue, variable);
-              modeDict[variable.name] = {
-                  type: variable.type,
-                  value: modeValue
-              };
-            });
-
-            if (!fileStructure[collection.collectionName]) {
-              fileStructure[collection.collectionName] = {};
-            }
-            fileStructure[collection.collectionName][mode.name] = modeDict;
-        });
-      });
-
-      console.log(fileStructure);
-
+      // Send the final result to the UI
       figma.ui.postMessage({ type: "EXPORT_RESULT", data: result });
     } catch (err) {
       console.error("Export error:", err);
@@ -225,6 +138,7 @@ figma.ui.onmessage = async (message) => {
     }
   }
 };
+
 
 if (figma.command === "export") {
   figma.showUI(__uiFiles__["export"], {
