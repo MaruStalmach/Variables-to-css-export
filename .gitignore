@@ -28,5 +28,5 @@ build/
 .vscode/
 .idea/
 
-# Ignore the main code file
-code.js
+#Old code files
+old_code/
