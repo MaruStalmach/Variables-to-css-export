@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Variables</title>
+    <style>
+      :root {
+            --spacing: 1rem;
+            --border-radius: 8px;
+            --transition: 0.2s ease-in-out;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--figma-color-bg);
+            color: var(--figma-color-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: var(--spacing);
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+        }
+
+        button {
+            border: none;
+            padding: 12px;
+            background-color: black;
+            color: white;
+            font-weight: bold;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        textarea {
+            background-color: var(--figma-color-bg-secondary);
+            border: 2px solid var(--figma-color-border);
+            color: var(--figma-color-text-secondary);
+            flex: 2;
+            font-family: monospace;
+            font-size: 12px;
+            padding: var(--spacing);
+            white-space: pre;
+            resize: none;
+            border-radius: var(--border-radius);
+            min-height: 200px;
+        }
+
+        #modes-container {
+            background: var(--figma-color-bg-secondary);
+            border: 1px solid var(--figma-color-border);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .collection-header {
+            font-weight: bold;
+            margin: 8px 0;
+            color: var(--figma-color-text);
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            padding: 6px;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .checkbox-container:hover {
+            background: var(--figma-color-bg-tertiary);
+        }
+
+        .checkbox-label {
+            margin-left: 8px;
+            color: var(--figma-color-text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div id="modes-container"></div>
+        <button id="exportBtn">Export to CSS</button>
+        <textarea id="outputArea" placeholder="Variables will render here..." readonly></textarea>
+    </main>
+
+    <script>
+      window.onload = function() {
+          const exportBtn = document.getElementById('exportBtn');
+          const outputArea = document.getElementById('outputArea');
+          const modesContainer = document.getElementById('modes-container');
+
+          parent.postMessage({ pluginMessage: { type: 'EXPORT' } }, '*');
+
+          exportBtn.onclick = () => {
+              const checkboxes = modesContainer.querySelectorAll('input[type="checkbox"]:checked');
+              
+              // Create CSS for each selected mode
+              checkboxes.forEach(checkbox => {
+                  const collection = checkbox.dataset.collection;
+                  const modeName = checkbox.dataset.mode;
+                  
+                  // Get variables for this specific mode
+                  const modeVariables = window.exportedData[collection][modeName];
+                  if (!modeVariables || modeVariables.length === 0) return;
+
+                  // Generate CSS for this mode
+                  let css = ':root {\n';
+                  modeVariables.forEach(variable => {
+                      css += `${variable}\n`;
+                  });
+                  css += '}\n';
+
+                  // Create filename
+                  const filename = `${modeName}_variables.css`;
+
+                  // Download the file
+                  const blob = new Blob([css], { type: 'text/css' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = filename;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+              });
+          };
+
+          window.onmessage = (event) => {
+              const msg = event.data.pluginMessage;
+              
+              if (!msg) return;
+
+              if (msg.type === 'EXPORT_RESULT') {
+                  window.exportedData = msg.data;
+                  renderCheckboxes(msg.data);
+                  updateOutput();
+              } else if (msg.type === 'EXPORT_ERROR') {
+                  outputArea.value = `Error: ${msg.error}`;
+              }
+          };
+
+          function renderCheckboxes(data) {
+              modesContainer.innerHTML = '';
+
+              Object.entries(data).forEach(([collectionName, modes]) => {
+                  const header = document.createElement('div');
+                  header.className = 'collection-header';
+                  header.textContent = collectionName;
+                  modesContainer.appendChild(header);
+
+                  Object.keys(modes).forEach(modeName => {
+                      const container = document.createElement('div');
+                      container.className = 'checkbox-container';
+
+                      const checkbox = document.createElement('input');
+                      checkbox.type = 'checkbox';
+                      checkbox.id = `${collectionName}-${modeName}`;
+                      checkbox.checked = false;
+                      checkbox.dataset.collection = collectionName;
+                      checkbox.dataset.mode = modeName;
+                      
+                      checkbox.addEventListener('change', updateOutput);
+
+                      const label = document.createElement('label');
+                      label.className = 'checkbox-label';
+                      label.htmlFor = checkbox.id;
+                      label.textContent = modeName;
+
+                      container.appendChild(checkbox);
+                      container.appendChild(label);
+                      modesContainer.appendChild(container);
+                  });
+              });
+          }
+
+          function updateOutput() {
+              const filteredData = {};
+              const checkboxes = modesContainer.querySelectorAll('input[type="checkbox"]');
+
+              checkboxes.forEach(checkbox => {
+                  if (checkbox.checked) {
+                      const collection = checkbox.dataset.collection;
+                      const mode = checkbox.dataset.mode;
+
+                      if (!filteredData[collection]) {
+                          filteredData[collection] = {};
+                      }
+                      filteredData[collection][mode] = window.exportedData[collection][mode];
+                  }
+              });
+
+              // Update preview
+              let preview = '';
+              Object.entries(filteredData).forEach(([collection, modes]) => {
+                  Object.entries(modes).forEach(([modeName, variables]) => {
+                      preview += `/* ${modeName}_variables.css */\n`;
+                      preview += ':root {\n';
+                      variables.forEach(variable => {
+                          preview += `${variable}\n`;
+                      });
+                      preview += '}\n\n';
+                  });
+              });
+
+              outputArea.value = preview;
+          }
+      };
+  </script>
+</body>
+</html>
