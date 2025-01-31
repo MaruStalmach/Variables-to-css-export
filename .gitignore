@@ -15,9 +15,6 @@ jspm_packages/
 dist/
 build/
 
-# Figma plugin UI files
-*.html
-
 # Environment variables
 .env
 

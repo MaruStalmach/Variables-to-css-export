@@ -30,7 +30,7 @@ const zielonyUpdates = {
 function convertToZielony(variables) {
   return variables.map(variable => {
     const [varName, ...rest] = variable.split(':');
-    const cleanVarName = varName.trim().slice(2); // Remove '--' prefix
+    const cleanVarName = varName.trim().slice(2); //removes --
     
     if (zielonyUpdates[cleanVarName]) {
       return `--${cleanVarName}: ${zielonyUpdates[cleanVarName]};`;
@@ -42,10 +42,10 @@ function convertToZielony(variables) {
 async function parseVariable(variable, modeValue) {
   const variableName = variableNameToCSS(variable.name);
 
-  // Handle case where modeValue is undefined/null
+  //for boolean handling 
   if (modeValue === undefined || modeValue === null) {
     if (variable.resolvedType === "BOOLEAN") {
-      // For boolean type, default to false when no value is specified
+      //defaults to false if nothing is specified
       return `--${variableName}: false;`;
     } else {
       console.error(`No modeValue found for variable: ${variableName}`);
@@ -54,7 +54,6 @@ async function parseVariable(variable, modeValue) {
   }
 
   try {
-    // Check if this specific modeValue is an alias
     if (modeValue.type === "VARIABLE_ALIAS") {
       return await resolveAlias(variable, variableName, modeValue);
     }
@@ -154,14 +153,12 @@ figma.ui.onmessage = async (message) => {
         console.log(`Exporting Collection: ${name}`);
         console.log(`Total variables to process: ${totalVariables}`);
 
-        // Initialize modes
         for (const mode of modes) {
           result[name][mode.name] = [];
-          // Add Zielony variant for each mode
+          //add Zielony Onet as a mode
           result[name][`${mode.name}_zielony`] = [];
         }
 
-        // Process variables
         for (const variableId of variableIds) {
           const variable = await figma.variables.getVariableByIdAsync(variableId);
           if (!variable) {
@@ -178,15 +175,15 @@ figma.ui.onmessage = async (message) => {
             continue;
           }
 
-          // Process each mode and create Zielony variants
           for (const mode of modes) {
             const modeValue = variable.valuesByMode[mode.modeId];
             const parsedVariable = await parseVariable(variable, modeValue);
             
             if (parsedVariable) {
-              // Add to original mode
+              //add to mode
               result[name][mode.name].push(parsedVariable);
               
+              //if Onet convert to Zielony
               if (mode.name === "Onet") {
                 result[name]["Zielony Onet"] = convertToZielony(result[name][mode.name]);
               }
@@ -207,7 +204,6 @@ figma.ui.onmessage = async (message) => {
         console.log(`Skipped Variables: ${skippedVariables.length}`);
         console.log('Skipped Variable Details:', skippedVariables);
 
-        // Filter out empty modes and collections
         for (const modeName in result[name]) {
           if (result[name][modeName].length === 0) {
             delete result[name][modeName];
