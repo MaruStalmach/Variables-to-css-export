@@ -110,26 +110,22 @@
           exportBtn.onclick = () => {
               const checkboxes = modesContainer.querySelectorAll('input[type="checkbox"]:checked');
               
-              // Create CSS for each selected mode
+              //css for selected mode
               checkboxes.forEach(checkbox => {
                   const collection = checkbox.dataset.collection;
                   const modeName = checkbox.dataset.mode;
-                  
-                  // Get variables for this specific mode
+                
                   const modeVariables = window.exportedData[collection][modeName];
                   if (!modeVariables || modeVariables.length === 0) return;
 
-                  // Generate CSS for this mode
+                  //generates css
                   let css = ':root {\n';
                   modeVariables.forEach(variable => {
                       css += `${variable}\n`;
                   });
                   css += '}\n';
 
-                  // Create filename
                   const filename = `${modeName}_variables.css`;
-
-                  // Download the file
                   const blob = new Blob([css], { type: 'text/css' });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -206,7 +202,7 @@
                   }
               });
 
-              // Update preview
+              //preview gets updated
               let preview = '';
               Object.entries(filteredData).forEach(([collection, modes]) => {
                   Object.entries(modes).forEach(([modeName, variables]) => {
