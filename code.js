@@ -4,41 +4,6 @@ let skippedVariables = [];
 let processedVariables = 0;
 let totalVariables = 0;
 
-//to pewnie sie da wydzielic do pliku zamiast tu
-const zielonyUpdates = {
-  'color-primary-brand': '#16cb7f',
-  'color-primary-main': '#16cb7f',
-  'color-primary-surface': '#aeeed3',
-  'color-primary-border': 'var(--colors-neutral-40)',
-  'color-primary-hover': '#0eb870',
-  'color-primary-pressed': '#069f5f',
-  'color-primary-focus': '#dof5e5',
-  'color-link-decoration': 'var(--color-primary-main-40)',
-  'color-button-primaryBg': 'var(--color-primary-brand)',
-  'color-button-primaryBgHover': 'var(--color-primary-hover)',
-  'color-button-primaryBgPressed': 'var(--color-primary-pressed)',
-  'color-button-primaryOutline': 'var(--color-primary-brand)',
-  'color-header-line': 'var(--color-primary-brand)',
-  'color-header-iconBackground': '#16cb7f',
-  'color-header-iconBackgroundHover': '#0eb870',
-  'color-card-decoration': 'var(--color-primary-brand)',
-  'color-card-decorationVisibility': 'true',
-  'color-labels-tylkkounasBg': 'var(--color-primary-brand)',
-  'color-bullet-color': 'var(--color-primary-brand)'
-};
-
-function convertToZielony(variables) {
-  return variables.map(variable => {
-    const [varName, ...rest] = variable.split(':');
-    const cleanVarName = varName.trim().slice(2); //removes --
-    
-    if (zielonyUpdates[cleanVarName]) {
-      return `--${cleanVarName}: ${zielonyUpdates[cleanVarName]};`;
-    }
-    return variable;
-  });
-}
-
 async function parseVariable(variable, modeValue) {
   const variableName = variableNameToCSS(variable.name);
 
@@ -155,8 +120,6 @@ figma.ui.onmessage = async (message) => {
 
         for (const mode of modes) {
           result[name][mode.name] = [];
-          //add Zielony Onet as a mode
-          result[name][`${mode.name}_zielony`] = [];
         }
 
         for (const variableId of variableIds) {
@@ -183,11 +146,6 @@ figma.ui.onmessage = async (message) => {
               //add to mode
               result[name][mode.name].push(parsedVariable);
               
-              //if Onet convert to Zielony
-              if (mode.name === "Onet") {
-                result[name]["Zielony Onet"] = convertToZielony(result[name][mode.name]);
-              }
-
               processedVariables++;
             } else {
               skippedVariables.push({
