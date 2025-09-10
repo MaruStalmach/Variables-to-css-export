@@ -1,8 +1,10 @@
 console.clear();
 
+
 let skippedVariables = [];
 let processedVariables = 0;
 let totalVariables = 0;
+
 
 async function parseVariable(variable, modeValue) {
   const variableName = variableNameToCSS(variable.name);
@@ -42,7 +44,8 @@ async function parseVariable(variable, modeValue) {
   }
 }
 
-async function resolveAlias(variable, variableName, modeValue) {
+
+async function resolveAlias(variableName, modeValue) {
   if (!modeValue || !modeValue.id) {
     return null;
   }
@@ -59,9 +62,11 @@ async function resolveAlias(variable, variableName, modeValue) {
   }
 }
 
+
 function variableNameToCSS(name) {
   return name.replace(/\//g, "-").replace(/\s+/g, "-");
 }
+
 
 function handleNumeric(value, variableName) {
   const numericValue = parseFloat(value);
@@ -72,6 +77,7 @@ function handleNumeric(value, variableName) {
   return `--${variableName}: ${numericValue}${suffix};`;
 }
 
+
 function handleColor(value, variableName) {
   if (!value || typeof value !== "object" || !("r" in value)) return null;
   
@@ -79,14 +85,23 @@ function handleColor(value, variableName) {
   return `--${variableName}: ${colorHex};`;
 }
 
+
 function handleString(value, variableName) {
   if (typeof value !== "string") return null;
   return `--${variableName}: "${value}";`;
 }
 
 function handleBoolean(value, variableName) {
+  const isVisibility = /visibility/i.test(variableName.toLowerCase()) //handles boolean variables connected with obj visibility
+  
+  if (isVisibility) {
+    console.log("INLINE BLOCK")
+    return `--${variableName}: ${value === true ? "inline-block" : "none"};`; //TODO: adjust if needed if bool variables are to be used in different contexts
+  }
+
   return `--${variableName}: ${value === true ? "true" : "false"};`;
 }
+
 
 function rgbToHex({ r, g, b, a = 1 }) {
   const toHex = (value) => {
@@ -100,6 +115,7 @@ function rgbToHex({ r, g, b, a = 1 }) {
 
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
+
 
 figma.ui.onmessage = async (message) => {
   if (message.type === "EXPORT") {
