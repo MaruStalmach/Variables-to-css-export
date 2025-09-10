@@ -1,13 +1,17 @@
 {
   "name": "varables-to-css-export",
-  "id": "1225498390710809905",
+  "id": "1513129221792384299",
   "api": "1.0.0",
-  "editorType": ["figma"],
+  "editorType": ["figma", "dev"],
+  "capabilities": ["inspect", "vscode"],
   "permissions": [],
   "main": "code.js",
   "menu": [
     { "command": "export", "name": "variables export" }
   ],
   "ui": {"export": "export.html" },
-  "documentAccess": "dynamic-page"
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
 }
