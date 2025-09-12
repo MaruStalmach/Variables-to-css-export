@@ -88,6 +88,13 @@ function handleString(value, variableName) {
 }
 
 function handleBoolean(value, variableName) {
+  const isVisibility = /visibility/i.test(variableName.toLowerCase()) //handles boolean variables connected with obj visibility
+  
+  if (isVisibility) {
+    console.log("INLINE BLOCK")
+    return `--${variableName}: ${value === true ? "inline-block" : "none"};`; //TODO: adjust if needed if bool variables are to be used in different contexts
+  }
+
   return `--${variableName}: ${value === true ? "true" : "false"};`;
 }
 
@@ -96,6 +103,10 @@ function rgbToHex({ r, g, b, a = 1 }) {
     const hex = Math.round(value * 255).toString(16);
     return hex.length === 1 ? "0" + hex : hex;
   };
+
+  if (a === 0) {
+    return `transparent`;
+  }
 
   if (a !== 1) {
     return `rgba(${[r, g, b].map(n => Math.round(n * 255)).join(", ")}, ${a.toFixed(2)})`;
