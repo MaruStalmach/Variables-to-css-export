@@ -81,7 +81,10 @@ function handleColor(value, variableName) {
 
 function handleString(value, variableName) {
   if (typeof value !== "string") return null;
-  return `--${variableName}: "${value}";`;
+  if (/font-family|font-ad/i.test(variableName)) { //for handling font names with potential white spaces
+    return `--${variableName}: "${value}";`;
+  }
+  return `--${variableName}: ${value};`; 
 }
 
 function handleBoolean(value, variableName) {
