@@ -4,60 +4,75 @@ let skippedVariables = [];
 let processedVariables = 0;
 let totalVariables = 0;
 
+
 async function parseVariable(variable, modeValue) {
   const variableName = variableNameToCSS(variable.name);
 
-  //for boolean handling 
-  if (modeValue === undefined || modeValue === null) {
-    if (variable.resolvedType === "BOOLEAN") {
-      //defaults to false if nothing is specified
-      return `--${variableName}: false;`;
-    } else {
-      console.error(`No modeValue found for variable: ${variableName}`);
+  const shouldSkip = await filterVariables(variableName);
+  if (shouldSkip) return null;
+
+  try {
+    //handle aliases
+    if (modeValue && modeValue.type === "VARIABLE_ALIAS") {
+      const aliasVariable = await figma.variables.getVariableByIdAsync(modeValue.id);
+      if (!aliasVariable) return null;
+
+      const aliasName = variableNameToCSS(aliasVariable.name);
+
+      //filter variables that are not meant to be exported
+      const skipAlias = await filterVariables(aliasName);
+      if (skipAlias) return null;
+
+      return `--${variableName}: var(--${aliasName});`;
+    }
+
+    return await handleVariableByType(variable, modeValue, variableName);
+
+  } catch (err) {
+    console.error(`error parsing variable ${variableName}:`, err);
+    return null;
+  }
+}
+
+
+/**
+ * Decides if a variable should be exported based on predefined conditions
+ * NOT EXPORTED:
+ * - Display variables containing the word "visible"
+ * - Variables containing "UX" in the name
+ */
+async function filterVariables(variableName) {
+  const lower = variableName.toLowerCase();
+
+  if (lower.includes("display") && lower.includes("visible")) {
+    return true;
+  }
+
+  if (lower.includes('ux')) {
+    return true;
+  }
+
+  return false;
+}
+
+async function handleVariableByType(variable, modeValue, variableName) {
+
+  switch (variable.resolvedType) {
+    case "FLOAT":
+      return handleNumeric(modeValue, variableName);
+    case "COLOR":
+      return handleColor(modeValue, variableName);
+    case "STRING":
+      return handleString(modeValue, variableName);
+    case "BOOLEAN":
+      return handleBoolean(modeValue, variableName);
+    default:
+      console.error(`unhandled variable type: ${variable.resolvedType} for ${variableName}`);
       return null;
-    }
   }
-
-  try {
-    if (modeValue.type === "VARIABLE_ALIAS") {
-      return await resolveAlias(variable, variableName, modeValue);
-    }
-
-    switch (variable.resolvedType) {
-      case "FLOAT":
-        return handleNumeric(modeValue, variableName);
-      case "COLOR":
-        return handleColor(modeValue, variableName);
-      case "STRING":
-        return handleString(modeValue, variableName);
-      case "BOOLEAN":
-        return handleBoolean(modeValue, variableName);
-      default:
-        console.error(`Unhandled variable type: ${variable.resolvedType} for ${variableName}`);
-        return null;
-    }
-  } catch (err) {
-    console.error(`Error parsing variable ${variableName}:`, err);
-    return null;
-  }
+  
 }
 
-async function resolveAlias(variable, variableName, modeValue) {
-  if (!modeValue || !modeValue.id) {
-    return null;
-  }
-
-  try {
-    const aliasVariable = await figma.variables.getVariableByIdAsync(modeValue.id);
-    if (!aliasVariable) return null;
-
-    const resolvedAlias = variableNameToCSS(aliasVariable.name);
-    return `--${variableName}: var(--${resolvedAlias});`;
-  } catch (err) {
-    console.error("Failed to resolve alias:", err);
-    return null;
-  }
-}
 
 function variableNameToCSS(name) {
   return name.replace(/\//g, "-").replace(/\s+/g, "-");
@@ -81,21 +96,29 @@ function handleColor(value, variableName) {
 
 function handleString(value, variableName) {
   if (typeof value !== "string") return null;
+
   if (/font-family|font-ad/i.test(variableName)) { //for handling font names with potential white spaces
     return `--${variableName}: "${value}";`;
   }
-  return `--${variableName}: ${value};`; 
+
+  return `--${variableName}: ${value.toLowerCase()};`; 
 }
 
 function handleBoolean(value, variableName) {
-  const isVisibility = /visibility/i.test(variableName.toLowerCase()) //handles boolean variables connected with obj visibility
-  
-  if (isVisibility) {
-    console.log("INLINE BLOCK")
-    return `--${variableName}: ${value === true ? "inline-block" : "none"};`; //TODO: adjust if needed if bool variables are to be used in different contexts
+  // variables in display refering to visibility are UX/UI only, not to be exported
+  const isVisible = /visible/i.test(variableName.toLowerCase());
+  const isDisplay = /display/i.test(variableName.toLowerCase());
+
+  if (isDisplay && isVisible) {
+    console.log("skipping", variableName);
+    return null;
   }
 
-  return `--${variableName}: ${value === true ? "true" : "false"};`;
+  if (isDisplay) {
+    return `--${variableName}: ${value === true ? "inline-block" : "none"};`;
+  }
+
+  return `--${variableName}: ${value};`;
 }
 
 function rgbToHex({ r, g, b, a = 1 }) {
@@ -105,7 +128,7 @@ function rgbToHex({ r, g, b, a = 1 }) {
   };
 
   if (a === 0) {
-    return `transparent`;
+    return `transparent`; //handles rgba in case of 100% transparency
   }
 
   if (a !== 1) {
@@ -117,70 +140,84 @@ function rgbToHex({ r, g, b, a = 1 }) {
 
 figma.ui.onmessage = async (message) => {
   if (message.type === "EXPORT") {
+
     try {
       const collections = await figma.variables.getLocalVariableCollectionsAsync();
       const result = {};
+      const modesToExport = new Set(["Onet", "Medonet", "Zielony Onet", "Komputer Świat", "Auto Świat", "Lifestyle"]); //TODO: update once new schemas are defined and ready for dev
+  
+      const allVariableIds = collections.flatMap(collection => collection.variableIds);
+     
+      const allVariables = await Promise.all(
+        allVariableIds.map(async (id) => {
+          try {
+            const variable = await figma.variables.getVariableByIdAsync(id);
+            return { id, variable };
+          } catch (err) {
+            console.error(`failed to fetch variable ${id}:`, err);
+            return { id, variable: null };
+          }
+        })
+      );
+      
+      const variableMap = new Map();
+      allVariables.forEach(({ id, variable }) => {
+        variableMap.set(id, variable);
+      });
 
       for (const collection of collections) {
         const { name, modes, variableIds } = collection;
+        const filteredModes = modes.filter(mode => modesToExport.has(mode.name) || mode.name === "Premium"); //filtering based on mode name, Premium variables should always be exportable
+        
+        if (filteredModes.length === 0) continue;
+
         result[name] = {};
+        console.log(`exporting collection: ${name}`);
+        console.log(`total variables to process: ${variableIds.length}`);
 
-        skippedVariables = [];
-        processedVariables = 0;
-        totalVariables = variableIds.length;
+    
+        const modePromises = filteredModes.map(async (mode) => {
+          const modeResults = [];
+          
+          for (const variableId of variableIds) {
+            const variable = variableMap.get(variableId);
+            
+            if (!variable) {
+              skippedVariables.push({
+                id: variableId,
+                name: null,
+                reason: "variable not found"
+              });
+              continue;
+            }
 
-        console.log(`Exporting Collection: ${name}`);
-        console.log(`Total variables to process: ${totalVariables}`);
-
-        for (const mode of modes) {
-          result[name][mode.name] = [];
-        }
-
-        for (const variableId of variableIds) {
-          const variable = await figma.variables.getVariableByIdAsync(variableId);
-          if (!variable) {
-            skippedVariables.push({ id: variableId, reason: "Variable not found" });
-            continue;
-          }
-
-          if (variable.name.toLowerCase().includes('ux')) {
-            skippedVariables.push({ 
-              id: variableId, 
-              name: variable.name, 
-              reason: "Contains 'ux' in name" 
-            });
-            continue;
-          }
-
-          for (const mode of modes) {
             const modeValue = variable.valuesByMode[mode.modeId];
             const parsedVariable = await parseVariable(variable, modeValue);
-            
+
             if (parsedVariable) {
-              //add to mode
-              result[name][mode.name].push(parsedVariable);
-              
-              processedVariables++;
+              modeResults.push(parsedVariable);
             } else {
               skippedVariables.push({
                 id: variableId,
                 name: variable.name,
                 mode: mode.name,
-                reason: "Failed to parse variable"
+                reason: "failed to parse variable"
               });
             }
           }
-        }
 
-        console.log(`Processed Variables: ${processedVariables}`);
-        console.log(`Skipped Variables: ${skippedVariables.length}`);
-        console.log('Skipped Variable Details:', skippedVariables);
+          return { modeName: mode.name, results: modeResults };
+        });
 
-        for (const modeName in result[name]) {
-          if (result[name][modeName].length === 0) {
-            delete result[name][modeName];
+      
+        const completedModes = await Promise.all(modePromises);
+      
+        completedModes.forEach(({ modeName, results }) => {
+          if (results.length > 0) {
+            result[name][modeName] = results;
           }
-        }
+        });
+
         if (Object.keys(result[name]).length === 0) {
           delete result[name];
         }
@@ -192,7 +229,7 @@ figma.ui.onmessage = async (message) => {
         skippedVariables: skippedVariables
       });
     } catch (err) {
-      console.error("Export error:", err);
+      console.error("export error:", err);
       figma.ui.postMessage({ type: "EXPORT_ERROR", error: err.message });
     }
   }
@@ -201,7 +238,7 @@ figma.ui.onmessage = async (message) => {
 if (figma.command === "export") {
   figma.showUI(__uiFiles__["export"], {
     width: 500,
-    height: 550,
+    height: 650,
     themeColors: true,
   });
 }
