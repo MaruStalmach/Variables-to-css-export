@@ -4,7 +4,6 @@ let skippedVariables = [];
 let processedVariables = 0;
 let totalVariables = 0;
 
-
 async function parseVariable(variable, modeValue) {
   const variableName = variableNameToCSS(variable.name);
 
@@ -14,7 +13,9 @@ async function parseVariable(variable, modeValue) {
   try {
     //handle aliases
     if (modeValue && modeValue.type === "VARIABLE_ALIAS") {
-      const aliasVariable = await figma.variables.getVariableByIdAsync(modeValue.id);
+      const aliasVariable = await figma.variables.getVariableByIdAsync(
+        modeValue.id
+      );
       if (!aliasVariable) return null;
 
       const aliasName = variableNameToCSS(aliasVariable.name);
@@ -27,13 +28,11 @@ async function parseVariable(variable, modeValue) {
     }
 
     return await handleVariableByType(variable, modeValue, variableName);
-
   } catch (err) {
     console.error(`error parsing variable ${variableName}:`, err);
     return null;
   }
 }
-
 
 /**
  * Decides if a variable should be exported based on predefined conditions
@@ -48,7 +47,7 @@ async function filterVariables(variableName) {
     return true;
   }
 
-  if (lower.includes('ux')) {
+  if (lower.includes("ux")) {
     return true;
   }
 
@@ -56,7 +55,6 @@ async function filterVariables(variableName) {
 }
 
 async function handleVariableByType(variable, modeValue, variableName) {
-
   switch (variable.resolvedType) {
     case "FLOAT":
       return handleNumeric(modeValue, variableName);
@@ -67,12 +65,12 @@ async function handleVariableByType(variable, modeValue, variableName) {
     case "BOOLEAN":
       return handleBoolean(modeValue, variableName);
     default:
-      console.error(`unhandled variable type: ${variable.resolvedType} for ${variableName}`);
+      console.error(
+        `unhandled variable type: ${variable.resolvedType} for ${variableName}`
+      );
       return null;
   }
-  
 }
-
 
 function variableNameToCSS(name) {
   return name.replace(/\//g, "-").replace(/\s+/g, "-");
@@ -89,7 +87,7 @@ function handleNumeric(value, variableName) {
 
 function handleColor(value, variableName) {
   if (!value || typeof value !== "object" || !("r" in value)) return null;
-  
+
   const colorHex = rgbToHex(value);
   return `--${variableName}: ${colorHex};`;
 }
@@ -97,11 +95,12 @@ function handleColor(value, variableName) {
 function handleString(value, variableName) {
   if (typeof value !== "string") return null;
 
-  if (/font-family|font-ad/i.test(variableName)) { //for handling font names with potential white spaces
+  if (/font-family|font-ad/i.test(variableName)) {
+    //for handling font names with potential white spaces
     return `--${variableName}: "${value}";`;
   }
 
-  return `--${variableName}: ${value.toLowerCase()};`; 
+  return `--${variableName}: ${value.toLowerCase()};`;
 }
 
 function handleBoolean(value, variableName) {
@@ -132,7 +131,9 @@ function rgbToHex({ r, g, b, a = 1 }) {
   }
 
   if (a !== 1) {
-    return `rgba(${[r, g, b].map(n => Math.round(n * 255)).join(", ")}, ${a.toFixed(2)})`;
+    return `rgba(${[r, g, b]
+      .map((n) => Math.round(n * 255))
+      .join(", ")}, ${a.toFixed(2)})`;
   }
 
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -140,14 +141,25 @@ function rgbToHex({ r, g, b, a = 1 }) {
 
 figma.ui.onmessage = async (message) => {
   if (message.type === "EXPORT") {
-
     try {
-      const collections = await figma.variables.getLocalVariableCollectionsAsync();
+      const collections =
+        await figma.variables.getLocalVariableCollectionsAsync();
       const result = {};
-      const modesToExport = new Set(["Onet", "Medonet", "Zielony Onet", "Komputer Świat", "Auto Świat", "Lifestyle"]); //TODO: update once new schemas are defined and ready for dev
-  
-      const allVariableIds = collections.flatMap(collection => collection.variableIds);
-     
+      const modesToExport = new Set([
+        "Onet",
+        "Medonet",
+        "Zielony Onet",
+        "Komputer Świat",
+        "Auto Świat",
+        "Lifestyle",
+        "Przegląd Sportowy",
+        "Business Insider",
+      ]); //TODO: update once new schemas are defined and ready for dev
+
+      const allVariableIds = collections.flatMap(
+        (collection) => collection.variableIds
+      );
+
       const allVariables = await Promise.all(
         allVariableIds.map(async (id) => {
           try {
@@ -159,7 +171,7 @@ figma.ui.onmessage = async (message) => {
           }
         })
       );
-      
+
       const variableMap = new Map();
       allVariables.forEach(({ id, variable }) => {
         variableMap.set(id, variable);
@@ -167,26 +179,27 @@ figma.ui.onmessage = async (message) => {
 
       for (const collection of collections) {
         const { name, modes, variableIds } = collection;
-        const filteredModes = modes.filter(mode => modesToExport.has(mode.name) || mode.name === "Premium"); //filtering based on mode name, Premium variables should always be exportable
-        
+        const filteredModes = modes.filter(
+          (mode) => modesToExport.has(mode.name) || mode.name === "Premium"
+        ); //filtering based on mode name, Premium variables should always be exportable
+
         if (filteredModes.length === 0) continue;
 
         result[name] = {};
         console.log(`exporting collection: ${name}`);
         console.log(`total variables to process: ${variableIds.length}`);
 
-    
         const modePromises = filteredModes.map(async (mode) => {
           const modeResults = [];
-          
+
           for (const variableId of variableIds) {
             const variable = variableMap.get(variableId);
-            
+
             if (!variable) {
               skippedVariables.push({
                 id: variableId,
                 name: null,
-                reason: "variable not found"
+                reason: "variable not found",
               });
               continue;
             }
@@ -201,7 +214,7 @@ figma.ui.onmessage = async (message) => {
                 id: variableId,
                 name: variable.name,
                 mode: mode.name,
-                reason: "failed to parse variable"
+                reason: "failed to parse variable",
               });
             }
           }
@@ -209,9 +222,8 @@ figma.ui.onmessage = async (message) => {
           return { modeName: mode.name, results: modeResults };
         });
 
-      
         const completedModes = await Promise.all(modePromises);
-      
+
         completedModes.forEach(({ modeName, results }) => {
           if (results.length > 0) {
             result[name][modeName] = results;
@@ -223,10 +235,10 @@ figma.ui.onmessage = async (message) => {
         }
       }
 
-      figma.ui.postMessage({ 
-        type: "EXPORT_RESULT", 
+      figma.ui.postMessage({
+        type: "EXPORT_RESULT",
         data: result,
-        skippedVariables: skippedVariables
+        skippedVariables: skippedVariables,
       });
     } catch (err) {
       console.error("export error:", err);
@@ -242,4 +254,3 @@ if (figma.command === "export") {
     themeColors: true,
   });
 }
-
