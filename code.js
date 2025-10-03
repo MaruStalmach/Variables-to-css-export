@@ -80,7 +80,7 @@ function handleNumeric(value, variableName) {
   const numericValue = parseFloat(value);
   if (isNaN(numericValue)) return null;
 
-  const skipPx = /bold|weight|regular|visibility/i.test(variableName);
+  const skipPx = /bold|weight|regular|visibility|radius/i.test(variableName);
   const suffix = skipPx ? "" : "px";
   return `--${variableName}: ${numericValue}${suffix};`;
 }
