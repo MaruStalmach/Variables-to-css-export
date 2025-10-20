@@ -76,12 +76,14 @@ function variableNameToCSS(name) {
   return name.replace(/\//g, "-").replace(/\s+/g, "-");
 }
 
-function handleNumeric(value, variableName) {
+async function handleNumeric(value, variableName) {
   const numericValue = parseFloat(value);
   if (isNaN(numericValue)) return null;
 
-  const skipPx = /bold|weight|regular|visibility|radius/i.test(variableName);
-  const suffix = skipPx ? "" : "px";
+  const skipPx = /bold|weight|regular|visibility/i.test(variableName);
+  const shouldSkipRadiusPx = /radius/i.test(variableName) && numericValue <= 0; //skip px for 0 radius values
+
+  const suffix = skipPx || shouldSkipRadiusPx ? "" : "px";
   return `--${variableName}: ${numericValue}${suffix};`;
 }
 
