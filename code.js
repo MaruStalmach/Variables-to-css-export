@@ -135,7 +135,7 @@ function rgbToHex({ r, g, b, a = 1 }) {
   if (a !== 1) {
     return `rgba(${[r, g, b]
       .map((n) => Math.round(n * 255))
-      .join(", ")}, ${a.toFixed(2)})`;
+      .join(", ")}, ${a.toFixed(2)})`; //TODO: fix the float export
   }
 
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -155,6 +155,7 @@ figma.ui.onmessage = async (message) => {
         "Auto Świat",
         "Lifestyle",
         "Przegląd Sportowy",
+        "Fakt",
         "Business Insider",
       ]); //TODO: update once new schemas are defined and ready for dev
 
