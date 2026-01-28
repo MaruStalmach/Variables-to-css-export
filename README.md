@@ -1,6 +1,6 @@
 # Variables to CSS Export
 
-A tool that converts design token variables into CSS custom properties with intelligent formatting and handling rules
+A plugin for design token variables conversion into CSS custom properties with custom-made formatting and handling rules
 
 ## Variable parsing rules
 
