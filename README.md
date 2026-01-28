@@ -2,7 +2,7 @@
 
 A tool that converts design token variables into CSS custom properties with intelligent formatting and handling rules
 
-## Variable Parsing Rules
+## Variable parsing rules
 
 - **Numerical variables:** All numerical variables are assigned the "px" suffix
 - **Exemptions from "px" suffix:** Variables containing the terms "bold", "regular", "weight", or "visibility" will not have the "px" suffix applied
@@ -10,7 +10,7 @@ A tool that converts design token variables into CSS custom properties with inte
 - **Exclusion criteria:** Any variable containing "ux" in its name will be excluded from the export process
 - **Font family name handling:** Variables that define font family names are exported with whitespace preserved, while all other string variables are exported without quotation marks
 
-## How to Use
+## How to use
 
 There are multiple ways of using the plugin:
 
